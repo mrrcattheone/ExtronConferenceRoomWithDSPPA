@@ -1,0 +1,5 @@
+PULL_UP_BTNS = {}
+PULL_DOWN_BTNS = {}
+
+PULL_UP_BTN_GRP = []
+PULL_DOWN_BTN_GRP = []
