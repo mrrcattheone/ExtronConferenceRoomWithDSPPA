@@ -94,7 +94,7 @@ def mic_state_checker(rcvString, automode): #parse string for mic id
     mic_power_state(mic_id, mic_state)
 
         
-# IF IS NECESSARY???
+# Set default state to mic btns in manual mode
 def set_default_btn_states():
     for btn in MIC_BTNS_GRP:
         btn.SetState(1)
@@ -129,15 +129,6 @@ def __SetHelper(commandstring, priority):
     send_queue.process()
 
 
-    # try:
-    #     MicControl.Send(data=commandstring)
-    #     # print('rs command sucessfully sent')
-    # except:
-    #     logs_screen.custom_logger('Conference Host rs232 command not sent')
-    #     print('Conference Host rs232 command not sent')
-
-
-
 def set_mic_power(btn_id):
     global clicked_mic_id
 
@@ -149,18 +140,15 @@ def set_mic_power(btn_id):
                 if btn.State == 1:
                     PowerCmdString = b'\xfb\xfd\x81\x03\x02\x00' + bytes([clicked_mic_id])
                     __SetHelper(PowerCmdString, 1)
+                    logs_screen.custom_logger('Mic state changed to 0')
                     logs_screen.custom_logger(PowerCmdString)
                     print(PowerCmdString)
                 elif btn.State == 0:
                     PowerCmdString = b'\xfb\xfd\x81\x03\x01\x00' + bytes([clicked_mic_id])
                     __SetHelper(PowerCmdString, 1)
-                    logs_screen.custom_logger('Not found btn id in list')
+                    logs_screen.custom_logger('Mic state changed to 1')
+                    logs_screen.custom_logger(PowerCmdString)
                     print(PowerCmdString)
     else:
         logs_screen.custom_logger('Not found btn id in list')
         print('Not found btn id in list')
-
-    
-
-                
-
