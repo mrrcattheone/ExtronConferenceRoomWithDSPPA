@@ -32,7 +32,6 @@ class Send_Queie:
         return self.queue
 
     def process(self):
-
         if not self.queue:  # Проверяем, пуста ли очередь
             print("No messages in the queue.")
             logs_screen.custom_logger("No messages in the queue.")
@@ -48,19 +47,50 @@ class Send_Queie:
 
             if isinstance(receiving_object, socket.socket):
                 try:
-                    # logs_screen.custom_logger("Output from Queie.process method:")
-                    # # logs_screen.custom_logger(str(receiving_object))
-                    # # logs_screen.custom_logger(type(receiving_object))
-                    # logs_screen.custom_logger(str(content))
-                    # logs_screen.custom_logger(str(type(content)))
-                    # logs_screen.custom_logger(ip_address)
-                    # logs_screen.custom_logger(str(type(ip_address)))
-                    # logs_screen.custom_logger(port)
-                    # logs_screen.custom_logger(str(type(port)))
                     receiving_object.sendto(content, (ip_address, int(port)))
-                    time.sleep(0.05)
+                    # time.sleep(0.09)
                     logs_screen.custom_logger("Ethernet interface: Command send")
                     print("Ethernet interface: Command send")
+                    if ip_address in [
+                        "10.90.5.53",
+                        "10.90.5.52",
+                        "10.90.5.51",
+                    ]:  # TODO IF no connection on socket - error
+                        state = "WAIT_FOR_ANSWER1"
+                        while True:
+                            if state == "WAIT_FOR_ANSWER1":
+                                answer1 = receiving_object.recv(1024)
+                                if answer1:
+                                    state = "WAIT_FOR_ANSWER2"
+                                    time.sleep(0.01)
+                                    logs_screen.custom_logger(
+                                        "WAIT_FOR_ANSWER1: First answer received"
+                                    )
+                                else:
+                                    # First answer not received, resend command
+                                    self.queue.insert(0, message)
+                                    logs_screen.custom_logger(
+                                        "WAIT_FOR_ANSWER1: First lost, resend command"
+                                    )
+                                    break
+                            elif state == "WAIT_FOR_ANSWER2":
+                                answer2 = receiving_object.recv(1024)
+                                if answer2:
+                                    # Both answers received, remove message from queue
+                                    self.queue.remove(message)
+                                    time.sleep(0.01)
+                                    logs_screen.custom_logger("Both answers received")
+                                    break
+                                else:
+                                    # Second answer not received, resend command
+                                    self.queue.insert(0, message)
+                                    logs_screen.custom_logger(
+                                        "WAIT_FOR_ANSWER2: Second lost, resend command"
+                                    )
+                                    break
+                    else:
+                        self.queue.remove(message)
+
                 except Exception as e:
                     print("Ethernet interface: Unable to send data", str(e))
                     logs_screen.custom_logger(
@@ -75,6 +105,7 @@ class Send_Queie:
                     )  # Выполняем команду для интерфейса SerialInterface
                     print("Serial interface: Command send")
                     logs_screen.custom_logger("Serial interface: Command send")
+                    self.queue.remove(message)
                 except Exception as e:
                     print("Ethernet interface: Unable to send data", str(e))
                     logs_screen.custom_logger(
@@ -84,7 +115,6 @@ class Send_Queie:
             else:
                 # Обработка других типов объектов
                 print("Unknown object type")
-            self.queue.remove(message)
 
     def size(self):
         return len(self.queue)

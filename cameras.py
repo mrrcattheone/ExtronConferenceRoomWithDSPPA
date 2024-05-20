@@ -1,16 +1,15 @@
 from struct import pack
 from extronlib.interface import EthernetClientInterface
 from extronlib.device import UIDevice
-from extronlib.ui import Button
+from extronlib.ui import Button, Label
 from extronlib import event
 from extronlib.system import Timer, Wait
 
 import socket
+import select
 
 from cameras_utils import *
 from cameras_const import *
-import confhost
-import universal_sender
 import logs_screen
 from universal_sender import *
 
@@ -29,18 +28,17 @@ camera_connect_state = False
 last_id_first_sector = None
 last_id_second_sector = None
 
+WebGUI = UIDevice("WebGUI")
+cam_control_label = Label(WebGUI, 327)
+
 cam1_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 cam2_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 cam3_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# previous_mic_ids = [None, None, None]
 
+# was 5678 TCP and 1259 UDP
 camera_nodes = {
-    16: {
-        "address": "10.90.5.51",
-        "port": 1259,
-        "protocol": "UDP",
-    },  # was 5678 TCP and 1259 UDP
+    16: {"address": "10.90.5.51", "port": 1259, "protocol": "UDP"},
     17: {"address": "10.90.5.52", "port": 1259, "protocol": "UDP"},
     18: {"address": "10.90.5.53", "port": 1259, "protocol": "UDP"},
 }
@@ -148,7 +146,7 @@ def init_cam_control_group():
 def camera_state_checker(camera_id):
     global active_cameras
     if camera_id in CAM_IDS:
-        set_state(cam_ids_list=True, id_cam_to_skip=camera_id)
+        set_state(cam_ids_list=True, cam_preset_list=True, id_cam_to_skip=camera_id)
     else:
         logs_screen.custom_logger("Wrong preset ID.")
         print("Wrong preset ID.")
@@ -248,11 +246,15 @@ def __SetHelper(PowerCmdString, priority_com):
             priority=priority_com,
         )
         logs_screen.custom_logger("Command send to socket_sender")
+        camera_labels_text_show("Команда отправлена", 3)
+        camera_labels_text_hide()
     else:
         print("Unable to send from camera to socket_sender. Wrond parameters")
         logs_screen.custom_logger(
             "Unable to send from camera to socket_sender. Wrond parameters"
         )
+        camera_labels_text_show("Не удалось отправить команду. Ошибка параметров.", 3)
+        camera_labels_text_hide()
 
 
 # UDP SENDER
@@ -267,12 +269,12 @@ def socket_sender(message, ip_address, port, priority):  # TODO ADD PRIORITY
             send_queue.process()
             logs_screen.custom_logger("Command sent to queue from camera 1")
             print("Command sent to queue from camera 1")
-            # cam1_socket.sendto(message, (ip_address, port))
         except Exception as e:
             print("Unable to send data to queue from cam_socket 1.", str(e))
             logs_screen.custom_logger(
                 "Unable to send data to queue from cam_socket 1.", str(e)
             )
+
     elif ip_address == "10.90.5.52":
         try:
             cam2_socket_command = Devices_Command(
@@ -282,12 +284,12 @@ def socket_sender(message, ip_address, port, priority):  # TODO ADD PRIORITY
             send_queue.process()
             logs_screen.custom_logger("Command sent to queue from camera 2")
             print("Command sent to queue from camera 2")
-            # cam2_socket.sendto(message, (ip_address, port))
         except Exception as e:
             print("Unable to send data to queue from cam_socket 2.", str(e))
             logs_screen.custom_logger(
                 "Unable to send data to queue from cam_socket 2.", str(e)
             )
+
     elif ip_address == "10.90.5.53":
         try:
             cam3_socket_command = Devices_Command(
@@ -297,7 +299,6 @@ def socket_sender(message, ip_address, port, priority):  # TODO ADD PRIORITY
             send_queue.process()
             logs_screen.custom_logger("Command sent to queue from camera 3")
             print("Command sent to queue from camera 3")
-            # cam3_socket.sendto(message, (ip_address, port))
         except Exception as e:
             print("Unable to send data to queue from cam_socket 3.", str(e))
             logs_screen.custom_logger(
@@ -310,8 +311,14 @@ def socket_sender(message, ip_address, port, priority):  # TODO ADD PRIORITY
 
 # reset states of camera btns and variables
 def reset_cameras_states():
+    global cam_node_udp
+    global cam_node_udp
+    global active_cameras
+    global active_preset_number
+    global active_presets
+
     set_state(cam_preset_list=True, cam_ids_list=True)
-    connected = None
+    cam_node_udp = None
     active_cameras = 0  # set from main page in listener. camera btn id
     active_preset_number = 0  # set from main page. preset number 1 to 9
     active_presets = 0
@@ -322,7 +329,7 @@ def reset_cameras_states():
 
 # PRESET ACTIONS
 def preset_walker(preset_btn):
-
+    priority = 3
     if active_cameras != 0:
         if active_presets != 0:
             if active_preset_number != 0:
@@ -334,11 +341,14 @@ def preset_walker(preset_btn):
                             + bytes([active_preset_number])
                             + b"\xFF"
                         )
-                        __SetHelper(PowerCmdString, 2)
+                        __SetHelper(PowerCmdString, priority)
                         logs_screen.custom_logger(
                             "Command SHOW PRESET send to socket_sender"
                         )
-                        logs_screen.custom_logger(PowerCmdString, 2)
+                        logs_screen.custom_logger(PowerCmdString, priority)
+                        camera_labels_text_show("Пресет камеры установлен", 3)
+                        camera_labels_text_hide()
+
                         # print(PowerCmdString)
                 elif preset_btn == 129:  # save
                     for cam_pr in CAM_PRESET_GRP:
@@ -347,18 +357,35 @@ def preset_walker(preset_btn):
                             + bytes([active_preset_number])
                             + b"\xFF"
                         )
-                        __SetHelper(PowerCmdString, 2)
+                        __SetHelper(PowerCmdString, priority)
                         # print(PowerCmdString)
                         logs_screen.custom_logger(
                             "Command SAVE PRESET send to socket_sender"
                         )
-                        logs_screen.custom_logger(PowerCmdString, 2)
+                        logs_screen.custom_logger(PowerCmdString, priority)
+                        camera_labels_text_show("Пресет камеры сохранён", 3)
+                        camera_labels_text_hide()
             else:
                 logs_screen.custom_logger("Wrong preset ID")
                 print("Wrong preset ID")
         else:
             logs_screen.custom_logger("Not selected preset")
             print("Not selected preset")
+            camera_labels_text_show("Выберите номер пресета", 2)
+            camera_labels_text_hide()
+
     else:
         logs_screen.custom_logger("Active camera not selected")
         print("Active camera not selected")
+        camera_labels_text_show("Выберите камеру", 2)
+        camera_labels_text_hide()
+
+
+def camera_labels_text_show(text, duration=2):
+    cam_control_label.SetText(text)
+    cam_control_label.SetVisible(True)
+
+
+def camera_labels_text_hide():
+    cam_control_label.SetVisible(False)
+

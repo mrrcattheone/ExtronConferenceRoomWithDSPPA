@@ -10,8 +10,6 @@ from extronlib.device import eBUSDevice, ProcessorDevice, UIDevice
 from extronlib.interface import SerialInterface
 from extronlib.ui import Button, Knob, Label, Level
 
-# from extronlib.system import Clock, MESet, Wait
-
 import confhost
 import stream
 import stream_const
@@ -46,6 +44,9 @@ WebGUI = UIDevice("WebGUI")  # WEbUI alias name
 ## global variables DEFINITION ---------------------------------------------------
 automode = False
 conference_type = None
+
+power_control_label = Label(WebGUI, 332)
+
 
 # BTN INIT
 # PageMain
@@ -138,6 +139,9 @@ camVideoBtn1 = Button(WebGUI, 272, holdTime=None, repeatTime=None)
 camVideoBtn2 = Button(WebGUI, 276, holdTime=None, repeatTime=None)
 camVideoBtn3 = Button(WebGUI, 273, holdTime=None, repeatTime=None)
 camVideoBtn4 = Button(WebGUI, 277, holdTime=None, repeatTime=None)
+camVideoBtn5 = Button(WebGUI, 329, holdTime=None, repeatTime=None)
+camVideoBtn6 = Button(WebGUI, 333, holdTime=None, repeatTime=None)
+camVideoBtn7 = Button(WebGUI, 334, holdTime=None, repeatTime=None)
 
 
 BtnMainMenuImageControl = Button(WebGUI, 8, holdTime=None, repeatTime=None)
@@ -258,6 +262,9 @@ image_control_group = [
     camVideoBtn2,
     camVideoBtn3,
     camVideoBtn4,
+    camVideoBtn5,
+    camVideoBtn6,
+    camVideoBtn7,
 ]
 
 video_out_btn_group = [
@@ -272,6 +279,8 @@ video_out_btn_group = [
 # PageModeSelection
 conference_preset_group = [localPresentationModeBtn, videoConferenceModeBtn]
 conference_start_and_stop_btns = [begin_conference_btn, terminate_conference_btn]
+
+power_control_label.SetVisible(False)
 
 
 stream.init_buttons(WebGUI)
@@ -300,6 +309,11 @@ connection_check.init_netcheck_control_group()
 schneider_light.Initialize()
 
 
+cameras.camera_labels_text_hide()
+confhost.mic_labels_text_hide()
+connection_check.state_labels_text_hide()
+
+
 def Initialize():
     WebGUI.ShowPage("PageModeSelection")
     global micAnswer
@@ -312,6 +326,10 @@ def Initialize():
     manual_automode_btn.SetState(1)
     priority_launcher1.SetState(1)
     priority_launcher2.SetState(1)
+    cameras.camera_labels_text_hide()
+    confhost.mic_labels_text_hide()
+    connection_check.state_labels_text_hide()
+    power_state_labels_text_hide()
 
 
 # INCOMING DATA RS232
@@ -322,10 +340,6 @@ def MainFeedbackHandler(interface, rcvString):
     logs_screen.custom_logger("Incoming RS232 string")
     print(rcvString)
     logs_screen.custom_logger(rcvString)
-    # print("Automode state is:")
-    # logs_screen.custom_logger("Automode state is:")
-    # print(automode)
-    # logs_screen.custom_logger(automode)
     confhost.mic_state_checker(rcvString, automode)
 
 
@@ -335,7 +349,7 @@ def mic_bt_click(button, state):
     if state == "Pressed":
         print("Mic btn clicked")
         logs_screen.custom_logger("Mic btn clicked")
-        confhost.set_mic_power(button.ID)
+        confhost.set_mic_power(button.ID, 1)
 
 
 # LCD on table lift UP
@@ -551,28 +565,36 @@ def ButtonObjectPressed(button, state):
 @event(power_all_tv_up, BtnEventList)
 def ButtonObjectPressed(button, state):
     if state == "Pressed":
+        power_state_labels_text_show("Включение видеостены. Подождите", 3)
         lcd.total_power_on()
+        power_state_labels_text_hide()
 
 
 # videowall power control from powerOn page
 @event(power_all_tv_down, BtnEventList)
 def ButtonObjectPressed(button, state):
     if state == "Pressed":
+        power_state_labels_text_show("Выключение видеостены. Подождите", 3)
         lcd.total_power_off()
+        power_state_labels_text_hide()
 
 
 # camera power control from powerOn page
 @event(camPowerGroup, BtnEventList)
 def ButtonObjectPressed(button, state):
     if state == "Pressed":
+        power_state_labels_text_show("Изменение состояния камеры. Подождите", 3)
         cameras.cam_power_group(button.ID)
+        power_state_labels_text_hide()
 
 
 # light control
 @event(lightPowerGroup, BtnEventList)
 def ButtonObjectPressed(button, state):
     if state == "Pressed":
+        power_state_labels_text_show("Отправка команды. Подождите", 5)
         schneider_light.command_selector(button.ID)
+        power_state_labels_text_hide()
 
 
 # Conference Mode Selector
@@ -632,17 +654,23 @@ def automode_button(button, state):
     if state == "Pressed":
         if automode == False:
             manual_automode_btn.SetState(0)
+            confhost.mic_labels_text_show("Запуск автотрекинга. Подождите", 1)
             automode = True
             autotracking.previous_mic_ids = [None, None, None]
             main_utils.mic_off()
             cameras.camera_set_default_preset()
+            confhost.mic_labels_text_show("Автотрекинг включен", 1)
+            confhost.mic_labels_text_hide()
         elif automode == True:
             manual_automode_btn.SetState(1)
             priority_launcher1.SetState(1)
             automode = False
+            confhost.mic_labels_text_show("Выключение автотрекинга. Подождите", 1)
             autotracking.previous_mic_ids = [None, None, None]
             main_utils.mic_off()
             cameras.camera_set_default_preset()
+            confhost.mic_labels_text_show("Автотрекинг отключен", 1)
+            confhost.mic_labels_text_hide()
 
 
 # TERMINATE AUTOMODE ON EXIT FROM CONFERENCE
@@ -694,6 +722,19 @@ def ButtHandler(btn, state):
         ProProcessor.Reboot()
         logs_screen.custom_logger("Reboot initialized. Wait for system restart.")
         print("Reboot initialized. Wait for system restart.")
+        power_state_labels_text_show("Перезагрузка контроллера, подождите", 5)
+        power_state_labels_text_hide
+
+
+def power_state_labels_text_show(text, duration=1):
+
+    power_control_label.SetText(text)
+    power_control_label.SetVisible(True)
+    # asyncio.sleep(duration)
+
+
+def power_state_labels_text_hide():
+    power_control_label.SetVisible(False)
 
 
 # connection check
@@ -719,18 +760,26 @@ def video_out_btn_click(button, state):
 def cam_priority_btn_click(button, state):
     if state == "Pressed":
         if button.State == 0:
+            confhost.mic_labels_text_show("Включен приоритет камеры главы.")
             priority_launcher1.SetState(1)
             priority_launcher2.SetState(1)
             autotracking.active_cam_mode = True
             autotracking.reset_autotracking_priority()
+
+            confhost.mic_labels_text_hide()
         elif button.State == 1:
+            confhost.mic_labels_text_show("Выключен приоритет камеры главы.")
             if automode == True:
                 priority_launcher1.SetState(0)
             priority_launcher2.SetState(0)
             autotracking.active_cam_mode = False
             # autotracking.reset_autotracking_priority()
+            confhost.mic_labels_text_hide()
+
         print("Camera priority mode changed")
         logs_screen.custom_logger("Camera priority mode changed")
 
+
+power_state_labels_text_hide()
 
 Initialize()
