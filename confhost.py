@@ -152,9 +152,9 @@ def mic_state_checker(rcvString, automode):  # parse string for mic id
         logs_screen.custom_logger("Not a state command. Waiting for valid command.")
         print("Not a state command. Waiting for valid command.")
 
+    mic_power_state(mic_id, mic_state)
     if automode == True:
         autotracking.autotrack(mic_id, mic_state)
-    mic_power_state(mic_id, mic_state)
 
 
 # Set default state to mic btns in manual mode

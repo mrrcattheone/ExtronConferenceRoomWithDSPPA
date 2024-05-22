@@ -1,6 +1,7 @@
 import socket
 import time
 import logs_screen
+from threading import Thread
 from extronlib.interface import SerialInterface
 
 
@@ -20,7 +21,36 @@ class Devices_Command:
         self.port = port
 
 
-class Send_Queie:
+class ListenerThread(Thread):
+    def __init__(self, receiving_object, queue, message):
+        super().__init__()
+        self.receiving_object = receiving_object
+        self.queue = queue
+        self.message = message
+        self.answer1 = None
+        self.answer2 = None
+
+    def run(self):
+        while True:
+            self.answer1 = self.receiving_object.recv(1024)
+            if self.answer1:
+                break
+
+        while True:
+            self.answer2 = self.receiving_object.recv(1024)
+            if self.answer2:
+                break
+
+        if self.answer1 and self.answer2:
+            self.queue.remove(self.message)
+            time.sleep(0.3)
+            logs_screen.custom_logger("Both answers received")
+        else:
+            self.queue.insert(0, self.message)
+            logs_screen.custom_logger("Answers lost, resend command")
+
+
+class Send_Queue:
     def __init__(self):
         self.queue = []
 
@@ -32,95 +62,56 @@ class Send_Queie:
         return self.queue
 
     def process(self):
-        if not self.queue:  # Проверяем, пуста ли очередь
+        if not self.queue:
             print("No messages in the queue.")
             logs_screen.custom_logger("No messages in the queue.")
             return
 
-        for message in self.queue:
+        while self.queue:
+            message = self.queue[0]
             receiving_object = message.receiving_object
             content = message.content
             ip_address = message.ip
             port = message.port
+
             if not isinstance(content, bytes):
                 content = content.encode("utf-8")
 
             if isinstance(receiving_object, socket.socket):
                 try:
                     receiving_object.sendto(content, (ip_address, int(port)))
-                    # time.sleep(0.09)
                     logs_screen.custom_logger("Ethernet interface: Command send")
                     print("Ethernet interface: Command send")
-                    if ip_address in [
-                        "10.90.5.53",
-                        "10.90.5.52",
-                        "10.90.5.51",
-                    ]:  # TODO IF no connection on socket - error
-                        state = "WAIT_FOR_ANSWER1"
-                        while True:
-                            if state == "WAIT_FOR_ANSWER1":
-                                answer1 = receiving_object.recv(1024)
-                                if answer1:
-                                    state = "WAIT_FOR_ANSWER2"
-                                    time.sleep(0.01)
-                                    logs_screen.custom_logger(
-                                        "WAIT_FOR_ANSWER1: First answer received"
-                                    )
-                                else:
-                                    # First answer not received, resend command
-                                    self.queue.insert(0, message)
-                                    logs_screen.custom_logger(
-                                        "WAIT_FOR_ANSWER1: First lost, resend command"
-                                    )
-                                    break
-                            elif state == "WAIT_FOR_ANSWER2":
-                                answer2 = receiving_object.recv(1024)
-                                if answer2:
-                                    # Both answers received, remove message from queue
-                                    self.queue.remove(message)
-                                    time.sleep(0.01)
-                                    logs_screen.custom_logger("Both answers received")
-                                    break
-                                else:
-                                    # Second answer not received, resend command
-                                    self.queue.insert(0, message)
-                                    logs_screen.custom_logger(
-                                        "WAIT_FOR_ANSWER2: Second lost, resend command"
-                                    )
-                                    break
+
+                    if ip_address in ["10.90.5.53", "10.90.5.52", "10.90.5.51"]:
+                        listener_thread = ListenerThread(
+                            receiving_object, self.queue, message
+                        )
+                        listener_thread.start()
+                        listener_thread.join(timeout=0.5)
                     else:
                         self.queue.remove(message)
 
                 except Exception as e:
-                    print("Ethernet interface: Unable to send data", str(e))
-                    logs_screen.custom_logger(
-                        "Ethernet interface: Unable to send data", str(e)
-                    )
+                    print("Ethernet interface: Unable to send data")
+                    logs_screen.custom_logger("Ethernet interface: Unable to send data")
 
             elif isinstance(receiving_object, SerialInterface):
                 try:
-                    # Если объект является экземпляром класса SerialInterface
-                    receiving_object.Send(
-                        content
-                    )  # Выполняем команду для интерфейса SerialInterface
-                    print("Serial interface: Command send")
+                    receiving_object.Send(content)
                     logs_screen.custom_logger("Serial interface: Command send")
+                    print("Serial interface: Command send")
                     self.queue.remove(message)
+
                 except Exception as e:
-                    print("Ethernet interface: Unable to send data", str(e))
-                    logs_screen.custom_logger(
-                        "Ethernet interface: Unable to send data", str(e)
-                    )
+                    print("Serial interface: Unable to send data")
+                    logs_screen.custom_logger("Serial interface: Unable to send data")
 
             else:
-                # Обработка других типов объектов
-                print("Unknown object type")
-
-    def size(self):
-        return len(self.queue)
-
-    def clear(self):
-        self.queue = []
+                print("Unknown receiving object type.")
+                logs_screen.custom_logger("Unknown receiving object type.")
+                self.queue.remove(message)
 
 
-send_queue = Send_Queie()
+# Создание экземпляра класса Send_Queue
+send_queue = Send_Queue()
