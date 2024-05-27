@@ -30,7 +30,6 @@ def reset_autotracking_priority():
 def autotrack(id_mic, mic_state):
 
     global previous_mic_ids
-    # global active_cam_mode
 
     id_presets_to_id_mic = {
         1: {"preset": 1, "sector": 0, "active_cam": 17},
@@ -57,11 +56,8 @@ def autotrack(id_mic, mic_state):
 
     if id_mic in id_presets_to_id_mic:  # если полученный ИД найден в списке, то...
         live_mic = id_presets_to_id_mic[id_mic]
-        logs_screen.custom_logger("Found mic_id in id_presets_to_id_mic list.")
-        print("Found mic_id in id_presets_to_id_mic list.")
-
-        # if confhost.all_mic_disabled == True: #all cam off = preset 11
-        #     cameras.camera_set_default_preset()
+        # logs_screen.custom_logger("Found mic_id in id_presets_to_id_mic list.")
+        # print("Found mic_id in id_presets_to_id_mic list.")
 
         if mic_state == 2:  # On
             if (
@@ -74,24 +70,26 @@ def autotrack(id_mic, mic_state):
                 cameras.active_preset_number = cameras.active_presets
                 cameras.preset_walker(128)
                 previous_mic_ids[live_mic["sector"]] = id_mic
-                logs_screen.custom_logger(
-                    "previous_mic_ids = None and it is first iteration"
-                )
+                # logs_screen.custom_logger(
+                #     "previous_mic_ids = None and it is first iteration"
+                # )
 
             elif previous_mic_ids[live_mic["sector"]] != None:
                 if previous_mic_ids[live_mic["sector"]] == id_mic:
                     logs_screen.custom_logger(
                         "Error: double time active mic. Check it."
                     )
-                    print("Error: double time active mic. Check it.")
+                    # print("Error: double time active mic. Check it.")
                 elif previous_mic_ids[live_mic["sector"]] != id_mic:
-                    main_utils.mic_off_with_exception(id_mic, live_mic["sector"])
+                    main_utils.latest_active_mic_off(
+                        previous_mic_ids[live_mic["sector"]], priority=1
+                    )
                     cameras.camera_node_checker(live_mic["active_cam"])
                     cameras.active_presets = live_mic["preset"]
                     cameras.active_cameras = live_mic["active_cam"]
                     cameras.active_preset_number = cameras.active_presets
                     cameras.preset_walker(128)
-                    logs_screen.custom_logger("previous_mic_ids != id_mic")
+                    # logs_screen.custom_logger("previous_mic_ids != id_mic")
                     previous_mic_ids[live_mic["sector"]] = (
                         id_mic  # current id_mic goes previous
                     )
@@ -99,7 +97,7 @@ def autotrack(id_mic, mic_state):
             if active_cam_mode == False:  # ic2 control
                 ic2.videoconference_with_priority(live_mic["sector"])
                 logs_screen.custom_logger("Chairman priority disabled")
-                print("Chairman priority disabled")
+                # print("Chairman priority disabled")
             # else:
             #     logs_screen.custom_logger('Head priority enabled')
             #     print('Head priority enabled')
@@ -115,9 +113,9 @@ def autotrack(id_mic, mic_state):
                     cameras.active_cameras = live_mic["active_cam"]
                     cameras.active_preset_number = cameras.active_presets
                     cameras.preset_walker(128)
-                    logs_screen.custom_logger(
-                        "is same as was - delete from prev and go equal view"
-                    )
+                    # logs_screen.custom_logger(
+                    #     "is same as was - delete from prev and go equal view"
+                    # )
 
             else:
                 logs_screen.custom_logger(

@@ -26,18 +26,8 @@ import logs_screen
 import connection_check
 from universal_sender import *
 
-## MODULE INSTANCE -------------------------------------------------------------
+
 ProProcessor = ProcessorDevice("ProXI")
-MicControlInput = SerialInterface(
-    ProProcessor,
-    "COM2",
-    Baud=9600,
-    Data=8,
-    Parity="None",
-    Stop=1,
-    CharDelay=0,
-    Mode="RS232",
-)
 
 ## USER INTERFACE DEFINITION ---------------------------------------------------
 WebGUI = UIDevice("WebGUI")  # WEbUI alias name
@@ -308,7 +298,6 @@ connection_check.init_netcheck_control_group()
 
 schneider_light.Initialize()
 
-
 cameras.camera_labels_text_hide()
 confhost.mic_labels_text_hide()
 connection_check.state_labels_text_hide()
@@ -332,15 +321,15 @@ def Initialize():
     power_state_labels_text_hide()
 
 
-# INCOMING DATA RS232
-@event(MicControlInput, "ReceiveData")
-def MainFeedbackHandler(interface, rcvString):
-    global automode
-    print("Incoming RS232 string")
-    logs_screen.custom_logger("Incoming RS232 string")
-    print(rcvString)
-    logs_screen.custom_logger(rcvString)
-    confhost.mic_state_checker(rcvString, automode)
+# # INCOMING DATA RS232
+# @event(MicControlInput, "ReceiveData")
+# def MainFeedbackHandler(interface, rcvString):
+#     global automode
+#     print("Incoming RS232 string")
+#     logs_screen.custom_logger("Incoming RS232 string")
+#     print(rcvString)
+#     logs_screen.custom_logger(rcvString)
+#     confhost.mic_state_checker(rcvString, automode)
 
 
 # mic btn click listner
@@ -349,7 +338,7 @@ def mic_bt_click(button, state):
     if state == "Pressed":
         print("Mic btn clicked")
         logs_screen.custom_logger("Mic btn clicked")
-        confhost.set_mic_power(button.ID, 1)
+        confhost.set_mic_power(button.ID, 3)
 
 
 # LCD on table lift UP
@@ -378,7 +367,7 @@ def ButtonObjectPressed(button, state):
             1: {
                 "pages": ["PageImageControl_1"],
                 "message": "Page Image Control Open",
-            },  # temprary changed to _1
+            },
             2: {"pages": ["PageMain"], "message": "Page Main Open"},
             3: {"pages": ["PageTVContol"], "message": "PageTVControl Open"},
             4: {"pages": ["PageCamControl"], "message": "PageCamControl Open"},
@@ -656,6 +645,7 @@ def automode_button(button, state):
             manual_automode_btn.SetState(0)
             confhost.mic_labels_text_show("Запуск автотрекинга. Подождите", 1)
             automode = True
+            confhost.automode = True
             autotracking.previous_mic_ids = [None, None, None]
             main_utils.mic_off()
             cameras.camera_set_default_preset()
@@ -665,6 +655,7 @@ def automode_button(button, state):
             manual_automode_btn.SetState(1)
             priority_launcher1.SetState(1)
             automode = False
+            confhost.automode = False
             confhost.mic_labels_text_show("Выключение автотрекинга. Подождите", 1)
             autotracking.previous_mic_ids = [None, None, None]
             main_utils.mic_off()
@@ -715,7 +706,7 @@ def mic_bt_click(button, state):
         WebGUI.ShowPage("PageMain")
 
 
-# RESTART DEVICE
+# RESTART DEVICE BTN
 @event(restart_system_btn, BtnEventList)
 def ButtHandler(btn, state):
     if state == "Pressed":
@@ -727,10 +718,8 @@ def ButtHandler(btn, state):
 
 
 def power_state_labels_text_show(text, duration=1):
-
     power_control_label.SetText(text)
     power_control_label.SetVisible(True)
-    # asyncio.sleep(duration)
 
 
 def power_state_labels_text_hide():

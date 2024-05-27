@@ -2,12 +2,12 @@ from struct import pack
 from extronlib.interface import SerialInterface, EthernetClientInterface
 from extronlib.device import UIDevice, ProcessorDevice
 from extronlib.ui import Button, Label
+from extronlib import event
 
 from confhost_const import *
 from confhost_utils import *
 import autotracking
 import logs_screen
-import asyncio
 from universal_sender import *
 
 mic_id = ""
@@ -15,6 +15,7 @@ mic_state = ""
 MIC_BTNS_GRP = None  # TODO move to const
 clicked_mic_id = 0
 all_mic_disabled = False
+automode = False
 
 ProProcessor = ProcessorDevice("ProXI")
 MicControl = SerialInterface(
@@ -124,12 +125,24 @@ def init_mic_btn_group():
     MIC_BTNS_GRP = [btn["btn_obj"] for btn in MIC_BTNS.values()]
 
 
-def mic_state_checker(rcvString, automode):  # parse string for mic id
+# INCOMING DATA RS232
+@event(MicControl, "ReceiveData")
+def MainFeedbackHandler(interface, rcvString):
+    # global automode
+    print("RS232 string message received")
+    logs_screen.custom_logger("RS232 string message received")
+    print(rcvString)
+    logs_screen.custom_logger(rcvString)
+    mic_state_checker(rcvString)
+
+
+def mic_state_checker(rcvString):  # parse string for mic id
     global mic_id
     global mic_state
     global all_mic_disabled
+    global automode
 
-    if rcvString[0] == 251:
+    if len(rcvString) >= 6:
         mic_id = rcvString[6]
         logs_screen.custom_logger("mic ID is:")
         logs_screen.custom_logger(mic_id)
@@ -140,21 +153,18 @@ def mic_state_checker(rcvString, automode):  # parse string for mic id
         logs_screen.custom_logger(mic_state)
         print("mic state is:")
         print(mic_state)  # 2 on, 1 off
-        try:
-            if rcvString[7] != None:
-                all_mic_disabled = True
-                logs_screen.custom_logger("last mic was disabled = True")
-                print("last mic was disabled = True")
-        except:
-            logs_screen.custom_logger("last mic disabled = False")
-            print("last mic disabled = False")
+        if len(rcvString) >= 8 and rcvString[7] is not None:
+            all_mic_disabled = True
+            logs_screen.custom_logger("last mic was disabled = True")
+            print("last mic was disabled = True")
+        mic_power_state(mic_id, mic_state)
+        if automode == True:
+            autotracking.autotrack(mic_id, mic_state)
     else:
-        logs_screen.custom_logger("Not a state command. Waiting for valid command.")
-        print("Not a state command. Waiting for valid command.")
-
-    mic_power_state(mic_id, mic_state)
-    if automode == True:
-        autotracking.autotrack(mic_id, mic_state)
+        logs_screen.custom_logger(
+            "Invalid rcvString length. Waiting for valid command."
+        )
+        print("Invalid rcvString length. Waiting for valid command.")
 
 
 # Set default state to mic btns in manual mode
@@ -168,10 +178,10 @@ def set_default_btn_states():
 # set state on/off
 def mic_power_state(id_mic, state_mic):
     global all_mic_disabled
-    test_btn = int(id_mic)
+    # test_btn = int(id_mic)
 
     for btn_id, btn_info in MIC_BTNS.items():
-        if btn_info["btn_id"] == test_btn:
+        if btn_info["btn_id"] == int(id_mic):
             for btn in MIC_BTNS_GRP:
                 if btn.ID == btn_id:
                     if state_mic == 2:
@@ -183,6 +193,12 @@ def mic_power_state(id_mic, state_mic):
                         btn.SetState(1)
                         logs_screen.custom_logger("set state OFF")
                         print("set state OFF")
+                    elif state_mic == 0:
+                        print("Mic btn set state ON, but mic is already ON")
+                        logs_screen.custom_logger(
+                            "Mic btn set state ON, but mic is already ON"
+                        )
+                        all_mic_disabled = False
 
 
 def __SetHelper(commandstring, priority):
@@ -200,7 +216,7 @@ def mic_labels_text_hide():
     mic_state_label.SetVisible(False)
 
 
-def set_mic_power(btn_id, priority=1):
+def set_mic_power(btn_id, priority=3):
     global clicked_mic_id
     if btn_id in MIC_BTNS.keys():
         clicked_mic_id = MIC_BTNS[btn_id]["btn_id"]

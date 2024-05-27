@@ -3,6 +3,7 @@ import socket
 import time
 import logs_screen
 from threading import Thread
+from queue import PriorityQueue
 from extronlib.interface import SerialInterface
 
 
@@ -14,12 +15,14 @@ class Devices_Command:
         priority: int,
         ip: str = None,
         port: int = None,
+        freezy_time=False,  # necessary sleep time
     ):
         self.receiving_object = receiving_object
         self.content = content
         self.priority = priority
         self.ip = ip
         self.port = port
+        self.freezy_time = freezy_time
 
 
 class ListenerThread(Thread):
@@ -43,7 +46,7 @@ class ListenerThread(Thread):
                 break
 
         if self.answer1 and self.answer2:
-            self.queue.remove(self.message)
+            # self.queue.remove(self.message)
             time.sleep(0.3)
             logs_screen.custom_logger("Both answers received")
         else:
@@ -55,12 +58,14 @@ class Send_Queue:
 
     # Init sending operations queue.
     def __init__(self):
-        self.queue = []
+        self.queue = PriorityQueue()
 
     # Adds new message to queue. Contains socket or serial port, command, priority, ip address and port, if needed.
     def append(self, message):
-        self.queue.append(message)
-        self.queue.sort(key=lambda msg: msg.priority)
+        self.queue.put((message.priority, message))
+        queue_length = self.queue.qsize()
+        logs_screen.custom_logger("Queue length is: ")
+        logs_screen.custom_logger(queue_length)
 
     # Special sender only for ethernet interface. Works after process method.
     def send_message_ethernet(self, message, event):
@@ -107,9 +112,10 @@ class Send_Queue:
             logs_screen.custom_logger("No messages in the queue.")
             return
 
-        while self.queue:
-            message = self.queue[0]
+        while not self.queue.empty():
+            _, message = self.queue.get()
             receiving_object = message.receiving_object
+            freezy_time = message.freezy_time
 
             # if not isinstance(content, bytes):
             #     content = message.content.encode("utf-8")
@@ -147,16 +153,19 @@ class Send_Queue:
 
                     # Waiting endpoint send_message_serial
                     event_serial.wait()
-                    self.queue.remove(message)
+                    # self.queue.remove(message)
 
                 except Exception as e:
                     print("Serial interface: Unable to send data")
                     logs_screen.custom_logger("Serial interface: Unable to send data")
-
             else:
                 print("Unknown receiving object type.")
                 logs_screen.custom_logger("Unknown receiving object type.")
-                self.queue.remove(message)
+                # self.queue.remove(message)
+
+            # Waiting time between commands
+            if freezy_time == True:
+                pass
 
 
 send_queue = Send_Queue()
