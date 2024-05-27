@@ -186,7 +186,6 @@ def mic_power_state(id_mic, state_mic):
 
 
 def __SetHelper(commandstring, priority):
-
     mic_control_command = Devices_Command(MicControl, commandstring, priority)
     send_queue.append(mic_control_command)
     send_queue.process()
@@ -198,7 +197,6 @@ def mic_labels_text_show(text, duration=1):
 
 
 def mic_labels_text_hide():
-    # asyncio.sleep(duration)
     mic_state_label.SetVisible(False)
 
 

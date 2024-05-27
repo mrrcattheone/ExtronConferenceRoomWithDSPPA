@@ -6,7 +6,7 @@ from extronlib import event
 from extronlib.system import Timer, Wait
 
 import socket
-import select
+import asyncio
 
 from cameras_utils import *
 from cameras_const import *
@@ -41,6 +41,11 @@ camera_nodes = {
     16: {"address": "10.90.5.51", "port": 1259, "protocol": "UDP"},
     17: {"address": "10.90.5.52", "port": 1259, "protocol": "UDP"},
     18: {"address": "10.90.5.53", "port": 1259, "protocol": "UDP"},
+}
+socket_dict = {
+    "10.90.5.51": cam1_socket,
+    "10.90.5.52": cam2_socket,
+    "10.90.5.53": cam3_socket,
 }
 
 
@@ -257,57 +262,25 @@ def __SetHelper(PowerCmdString, priority_com):
         camera_labels_text_hide()
 
 
-# UDP SENDER
-def socket_sender(message, ip_address, port, priority):  # TODO ADD PRIORITY
-
-    if ip_address == "10.90.5.51":
-        try:
-            cam1_socket_command = Devices_Command(
-                cam1_socket, message, int(priority), str(ip_address), int(port)
-            )
-            send_queue.append(cam1_socket_command)
-            send_queue.process()
-            logs_screen.custom_logger("Command sent to queue from camera 1")
-            print("Command sent to queue from camera 1")
-        except Exception as e:
-            print("Unable to send data to queue from cam_socket 1.", str(e))
-            logs_screen.custom_logger(
-                "Unable to send data to queue from cam_socket 1.", str(e)
-            )
-
-    elif ip_address == "10.90.5.52":
-        try:
-            cam2_socket_command = Devices_Command(
-                cam2_socket, message, int(priority), str(ip_address), int(port)
-            )
-            send_queue.append(cam2_socket_command)
-            send_queue.process()
-            logs_screen.custom_logger("Command sent to queue from camera 2")
-            print("Command sent to queue from camera 2")
-        except Exception as e:
-            print("Unable to send data to queue from cam_socket 2.", str(e))
-            logs_screen.custom_logger(
-                "Unable to send data to queue from cam_socket 2.", str(e)
-            )
-
-    elif ip_address == "10.90.5.53":
-        try:
-            cam3_socket_command = Devices_Command(
-                cam3_socket, message, int(priority), str(ip_address), int(port)
-            )
-            send_queue.append(cam3_socket_command)
-            send_queue.process()
-            logs_screen.custom_logger("Command sent to queue from camera 3")
-            print("Command sent to queue from camera 3")
-        except Exception as e:
-            print("Unable to send data to queue from cam_socket 3.", str(e))
-            logs_screen.custom_logger(
-                "Unable to send data to queue from cam_socket 3.", str(e)
-            )
-    else:
-        print("Wrong ip_address in socket_sender.")
-        logs_screen.custom_logger("Wrong ip_address in socket_sender.")
-
+# UDP method for sending cameras data.
+def socket_sender(message, ip_address, port, priority):
+    try:
+        receiving_object = socket_dict[ip_address]
+        socket_command = Devices_Command(
+            receiving_object, message, int(priority), str(ip_address), int(port)
+        )
+        send_queue.append(socket_command)
+        send_queue.process()
+        logs_screen.custom_logger("Command sent to queue for camera {}".format(ip_address))
+        print("Command sent to queue for camera {}".format(ip_address))
+    except KeyError:
+        print("Wrong ip_address in socket_sender: {}".format(ip_address))
+        logs_screen.custom_logger("Wrong ip_address in socket_sender: {}".format(ip_address))
+    except Exception as e:
+        print("Unable to send data to queue for cam_socket {}: {}".format(ip_address, str(e)))
+        logs_screen.custom_logger(
+            "Unable to send data to queue for cam_socket {}: {}".format(ip_address, str(e))
+        )
 
 # reset states of camera btns and variables
 def reset_cameras_states():
@@ -388,4 +361,3 @@ def camera_labels_text_show(text, duration=2):
 
 def camera_labels_text_hide():
     cam_control_label.SetVisible(False)
-

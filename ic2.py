@@ -6,6 +6,7 @@ from extronlib import event
 from extronlib.system import Timer, Wait
 
 import time  # For monotonic()
+import asyncio
 import socket
 import logs_screen
 from universal_sender import *
@@ -127,7 +128,7 @@ def socket_sender(message, ip_address, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # sock.sendto(message.encode('utf-8'), (ip_address, port))
     ic2_node_command = Devices_Command(
-        sock, message.encode("utf-8"), 3, ip_address, port
+        sock, message.encode("utf-8"), 11, ip_address, port
     )
     send_queue.append(ic2_node_command)
     send_queue.process()
